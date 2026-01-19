@@ -1,35 +1,61 @@
-def retrieve_context(
-    query: str,
-    limit: int = 4,
-    stack_id: str | None = None,
-    min_score: float = 0.2,
-) -> str:
-    """
-    Retrieve relevant chunks for RAG with filtering
-    """
-    query_embedding = embed_texts([query])[0]
+import uuid
+import chromadb
+from chromadb.config import Settings
+from openai import OpenAI
+from app.core.config import settings
+from app.utils.chunker import chunk_text
 
-    where_clause = {"stack_id": stack_id} if stack_id else None
+chroma_client = chromadb.Client(
+    Settings(
+        persist_directory="/data",
+        anonymized_telemetry=False,
+    )
+)
 
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=limit,
-        where=where_clause,
-        include=["documents", "distances", "metadatas"]
+
+openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
+
+def get_collection(stack_id: str | None = None):
+    """
+    Get or create a Chroma collection.
+    Single collection, stack_id stored in metadata.
+    """
+    return chroma_client.get_or_create_collection(
+        name=settings.CHROMA_COLLECTION
     )
 
-    documents = results.get("documents", [[]])[0]
-    distances = results.get("distances", [[]])[0]
 
-    filtered = []
-    for doc, dist in zip(documents, distances):
-        # Chroma distance: lower = more similar
-        if dist is not None and dist <= min_score:
-            filtered.append(doc)
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    response = openai_client.embeddings.create(
+        model=settings.OPENAI_EMBEDDING_MODEL,
+        input=texts,
+    )
+    return [e.embedding for e in response.data]
 
-    if not filtered:
-        return ""
 
-    return "\n\n".join(
-        f"[KB]\n{doc}" for doc in filtered
+
+def add_document(
+    text: str,
+    stack_id: str | None = None,
+):
+    """
+    Chunk → embed → store in Chroma
+    """
+    if not text.strip():
+        return
+
+    chunks = chunk_text(text)
+    embeddings = embed_texts(chunks)
+
+    ids = [str(uuid.uuid4()) for _ in chunks]
+    metadatas = [{"stack_id": stack_id} for _ in chunks]
+
+    collection = get_collection(stack_id)
+
+    collection.add(
+        documents=chunks,
+        embeddings=embeddings,
+        ids=ids,
+        metadatas=metadatas,
     )
