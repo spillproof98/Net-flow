@@ -5,15 +5,8 @@ from app.core.llm_client import chat_completion
 
 
 def render_prompt(template: str, runtime: dict) -> str:
-    """
-    Safely replaces {variables} in prompt templates.
-    Non-string values are stringified.
-    """
     for key, value in runtime.items():
-        template = template.replace(
-            f"{{{key}}}",
-            str(value)
-        )
+        template = template.replace(f"{{{key}}}", str(value))
     return template
 
 
@@ -28,11 +21,10 @@ async def execute_workflow(
     node_map = {n["id"]: n for n in nodes}
     execution_order = topo_sort(nodes, edges)
 
-    # 🔥 Graph-wide runtime memory
     runtime = {
         "query": user_query,
         "context": "",
-        "output": ""
+        "output": "",
     }
 
     for node_id in execution_order:
@@ -48,46 +40,42 @@ async def execute_workflow(
         elif node_type == "knowledgeBase":
             kb_context = retrieve_context(
                 runtime["query"],
-                stack_id=stack_id
+                stack_id=stack_id,
             )
-
             if kb_context:
                 runtime["context"] += (
-                    "\n\n[KNOWLEDGE BASE]\n"
-                    f"{kb_context}"
+                    "\n\n[KNOWLEDGE BASE]\n" + kb_context
                 )
 
-        # 3️⃣ Web Search
+        # 3️⃣ Web Search (FIXED)
         elif node_type == "webSearch":
-            web_results = await web_search(runtime["query"])
-
-            if web_results:
-                formatted = "\n".join(
-                    f"- {r['title']}: {r['snippet']}"
-                    for r in web_results
-                )
-
+            web_text = await web_search(runtime["query"])
+            if web_text:
                 runtime["context"] += (
-                    "\n\n[WEB SEARCH RESULTS]\n"
-                    f"{formatted}"
+                    "\n\n[WEB SEARCH RESULTS]\n" + web_text
                 )
 
         # 4️⃣ LLM
         elif node_type == "llm":
-            prompt_template = data.get("prompt", "")
-            temperature = data.get("temperature", 0.7)
-            model = data.get("model", "gpt-4o-mini")
+            if not runtime["context"]:
+                runtime["context"] = "No external context available."
 
-            prompt = render_prompt(prompt_template, runtime)
+            prompt = render_prompt(
+                data.get(
+                    "prompt",
+                    "Answer using the context below.\n\n{context}\n\nQuestion: {query}"
+                ),
+                runtime,
+            )
 
             runtime["output"] = await chat_completion(
                 prompt=prompt,
-                temperature=temperature,
-                model=model
+                temperature=data.get("temperature", 0.7),
+                model=data.get("model", "gpt-4o-mini"),
             )
 
         # 5️⃣ Output
         elif node_type == "output":
-            return runtime.get("output", "")
+            return runtime["output"]
 
-    return runtime.get("output", "")
+    return runtime["output"]
