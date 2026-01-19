@@ -1,8 +1,20 @@
 import axios from "axios"
 
+// Ensure baseURL ALWAYS ends with a slash (FastAPI-safe)
+const rawBaseURL = import.meta.env.VITE_API_BASE_URL
+
+if (!rawBaseURL) {
+  console.error("❌ VITE_API_BASE_URL is not defined")
+}
+
+const baseURL = rawBaseURL.replace(/\/?$/, "/")
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8000",
+  baseURL,               // e.g. https://net-flow-production.up.railway.app/
   withCredentials: false,
+  headers: {
+    "Content-Type": "application/json",
+  },
 })
 
 // Attach access token
@@ -22,8 +34,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("token")
-        window.location.href = "/login"
-      }
+      window.location.href = "/login"
+    }
 
     return Promise.reject(error)
   }

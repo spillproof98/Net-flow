@@ -1,7 +1,6 @@
 import { create } from "zustand"
 import api from "../services/api"
 
-
 type StackApi = {
   id: string
   name: string
@@ -31,7 +30,7 @@ export const useStackStore = create<StackState>((set) => ({
   fetchStacks: async () => {
     set({ loading: true })
 
-    const res = await api.get<StackApi[]>("/stacks")
+    const res = await api.get<StackApi[]>("stacks/")
 
     set({
       stacks: res.data.map((s) => ({
@@ -44,7 +43,7 @@ export const useStackStore = create<StackState>((set) => ({
   },
 
   createStack: async (name: string) => {
-    const res = await api.post<StackApi>("/stacks", { name })
+    const res = await api.post<StackApi>("stacks/", { name })
 
     set((state) => ({
       stacks: [
@@ -59,7 +58,7 @@ export const useStackStore = create<StackState>((set) => ({
   },
 
   updateStack: async (id: string, name: string) => {
-    const res = await api.put<StackApi>(`/stacks/${id}`, { name })
+    const res = await api.put<StackApi>(`stacks/${id}/`, { name })
 
     set((state) => ({
       stacks: state.stacks.map((s) =>
@@ -75,7 +74,7 @@ export const useStackStore = create<StackState>((set) => ({
   },
 
   deleteStack: async (id: string) => {
-    await api.delete(`/stacks/${id}`)
+    await api.delete(`stacks/${id}/`)
 
     set((state) => ({
       stacks: state.stacks.filter((s) => s.id !== id),

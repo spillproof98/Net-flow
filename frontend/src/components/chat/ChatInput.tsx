@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { useChatStore } from "../../store/chatStore";
 import { useWorkflowStore } from "../../store/workflowStore";
+import api from "../../services/api";   // ✅ USE AXIOS
 
-export default function ChatInput({
-  stackId,
-}: {
-  stackId: string;
-}) {
+export default function ChatInput({ stackId }: { stackId: string }) {
   const [input, setInput] = useState("");
   const addMessage = useChatStore((s) => s.addMessage);
   const { nodes, edges } = useWorkflowStore();
@@ -17,36 +14,29 @@ export default function ChatInput({
     const userMessage = input;
     setInput("");
 
-    // User message
     addMessage({
       role: "user",
       content: userMessage,
     });
 
-    // Execute WORKFLOW
-    const res = await fetch(
-      "http://localhost:8000/workflow/run",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nodes,
-          edges,
-          user_query: userMessage,
-          stack_id: stackId,
-        }),
-      }
-    );
+    try {
+      const res = await api.post("/workflow/run", {
+        nodes,
+        edges,
+        user_query: userMessage,
+        stack_id: stackId,
+      });
 
-    const data = await res.json();
-
-    // Assistant message (workflow output)
-    addMessage({
-      role: "assistant",
-      content: data.output,
-    });
+      addMessage({
+        role: "assistant",
+        content: res.data.output,
+      });
+    } catch (err) {
+      addMessage({
+        role: "assistant",
+        content: "❌ Failed to run workflow",
+      });
+    }
   };
 
   return (
